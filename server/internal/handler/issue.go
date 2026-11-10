@@ -1153,6 +1153,7 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 }
 
 func (h *Handler) SearchIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	ctx := r.Context()
 	workspaceID := h.resolveWorkspaceID(r)
 
@@ -1331,6 +1332,7 @@ func (h *Handler) SearchIssues(w http.ResponseWriter, r *http.Request) {
 // as ListIssues' query parameters; the handler rebuilds the query string and
 // delegates, so the two transports cannot drift.
 func (h *Handler) QueryIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	var params map[string]string
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&params); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -1345,6 +1347,7 @@ func (h *Handler) QueryIssues(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	ctx := r.Context()
 
 	workspaceID := h.resolveWorkspaceID(r)
@@ -2075,6 +2078,7 @@ func parseActorFilterList(w http.ResponseWriter, raw, fieldName string) ([]issue
 }
 
 func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	ctx := r.Context()
 	if h.DB == nil {
 		writeError(w, http.StatusInternalServerError, "database is unavailable")
@@ -2562,6 +2566,7 @@ ORDER BY
 }
 
 func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	id := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, id)
 	if !ok {
@@ -2613,6 +2618,7 @@ func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListChildIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	id := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, id)
 	if !ok {
@@ -2669,6 +2675,7 @@ const listChildrenByParentsLimit = 200
 // belong to the caller's workspace simply yields zero children, so callers
 // can't probe parents across workspace boundaries.
 func (h *Handler) ListChildrenByParents(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	workspaceID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
 	if !ok {
@@ -2747,6 +2754,7 @@ func (h *Handler) ListChildrenByParents(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) ChildIssueProgress(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	wsID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, wsID, "workspace_id")
 	if !ok {
@@ -2826,6 +2834,7 @@ type QuickCreateIssueResponse struct {
 }
 
 func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	var req QuickCreateIssueRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -3326,6 +3335,7 @@ func duplicateIssueMessage(issue IssueResponse) string {
 }
 
 func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	r = h.withWakeupActor(r)
 	var req CreateIssueRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -3612,6 +3622,9 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.validateBlockerVisibility(w, r, wsUUID, req.BlockedBy) {
+		return
+	}
 	res, err := h.IssueService.Create(r.Context(), service.IssueCreateParams{
 		BlockedBy:              blockerIDs,
 		WorkspaceID:            wsUUID,
@@ -3654,7 +3667,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 			// issue_labels:changed broadcast is gone.
 			labelResponses := labelsToResponse(labels)
 			payload.Labels = &labelResponses
-			return map[string]any{"issue": payload}
+			return map[string]any{"issue": publicBlockerResponse(payload)}
 		},
 	})
 
@@ -3998,6 +4011,7 @@ func (h *Handler) updateIssueAtomically(ctx context.Context, workspaceID pgtype.
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	r = h.withWakeupActor(r)
 	id := chi.URLParam(r, "id")
 	prevIssue, ok := h.loadIssueForUser(w, r, id)
@@ -4024,6 +4038,9 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := h.parseBlockerIDs(w, req.RemoveBlockedBy); !ok {
+		return
+	}
+	if !h.validateBlockerVisibility(w, r, prevIssue.WorkspaceID, req.BlockedBy) {
 		return
 	}
 
@@ -4643,6 +4660,7 @@ func (h *Handler) isAgentAssigneeReady(ctx context.Context, issue db.Issue) bool
 }
 
 func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	r = h.withWakeupActor(r)
 	id := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, id)
@@ -4829,6 +4847,7 @@ type BatchUpdateIssuesRequest struct {
 }
 
 func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	r = h.withWakeupActor(r)
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -4904,6 +4923,9 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
 	if !ok {
+		return
+	}
+	if !h.validateBlockerVisibility(w, r, wsUUID, req.Updates.BlockedBy) {
 		return
 	}
 	// Status is validated against this workspace's catalog, so it has to wait
@@ -5237,6 +5259,7 @@ type BatchDeleteIssuesRequest struct {
 }
 
 func (h *Handler) BatchDeleteIssues(w http.ResponseWriter, r *http.Request) {
+	r = h.withBlockerViewer(r)
 	var req BatchDeleteIssuesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
