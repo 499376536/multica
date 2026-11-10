@@ -191,7 +191,7 @@
     "section_project": "Projet",
     "section_project_status": "Statut du projet",
     "section_label": "Étiquette",
-    "section_relation": "Lien avec moi",
+    "section_relation": "Relations",
     "relation_assigned": "Qui me sont assignés",
     "relation_created": "Créés par moi",
     "relation_my_agents": "Assignés à mes agents",
@@ -278,7 +278,8 @@
     "advanced_group_match_trailing": "de ces conditions",
     "advanced_group_hint": "Les conditions de ce groupe sont reliées par « {{word}} »",
     "advanced_add_to_group": "Ajouter au groupe",
-    "advanced_turn_into_group": "Transformer en groupe"
+    "advanced_turn_into_group": "Transformer en groupe",
+    "relation_blocked": "Bloqué"
   },
   "display": {
     "tooltip": "Paramètres d'affichage",
@@ -1940,5 +1941,15 @@
     "copy_url": "Copier l'URL",
     "copied": "URL copiée",
     "copy_failed": "Impossible de copier l'URL"
+  },
+  "waiting": {
+    "title": "En attente",
+    "add": "Ajouter un prérequis",
+    "remove": "Retirer {{identifier}}",
+    "count": "En attente de {{count}} tâches",
+    "stage": "Étapes précédentes · {{finished}}/{{total}} terminées",
+    "hint": "Une fois ces tâches terminées, le responsable démarre automatiquement ou reçoit une notification.",
+    "empty": "Aucune tâche à attendre",
+    "picker_hint": "Sélectionnez une tâche qui doit se terminer avant celle-ci."
   }
 }

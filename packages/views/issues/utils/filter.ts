@@ -393,6 +393,8 @@ function issueMatchesRelation(
   context: IssueRelationContext,
 ): boolean | undefined {
   switch (relation) {
+    case "blocked":
+      return (issue.blocked_count ?? 0) > 0;
     case "subscribed":
       return context.subscribedIssueIds?.has(issue.id);
     case "assigned":
